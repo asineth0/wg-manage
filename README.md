@@ -1,6 +1,6 @@
 # wg-manage
 
-Sets up WireGuard + Unbound on Ubuntu 20.04+.
+Manages WireGuard on Ubuntu 20.04+.
 
 ## Usage
 

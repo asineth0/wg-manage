@@ -25,19 +25,14 @@ if [ ! -d /etc/wireguard ]; then
 	echo "ListenPort = $PORT" >> /etc/wireguard/wg0.conf
 	echo "PrivateKey = $PRIVKEY" >> /etc/wireguard/wg0.conf
 
-	echo "server:" > /etc/unbound/unbound.conf
-	echo "interface: 10.66.66.1" >> /etc/unbound/unbound.conf
-	echo "access-control: 10.66.66.0/24 allow" >> /etc/unbound/unbound.conf
-
 	ech 'net.ipv4.ip_forward=1' > /etc/sysctl.d/wg.conf
 	sysctl --system
 
-	systemctl enable --now wg-quick@wg0 unbound
+	systemctl enable --now wg-quick@wg0
 
 	if [ -f /usr/sbin/ufw ]; then
 		ufw allow in to any port $PORT proto udp
 		ufw route allow in on wg0
-		ufw allow in on wg0 to any port 53 proto udp
 	fi
 fi
 
@@ -86,10 +81,7 @@ case $OPT in
 		echo "PresharedKey = $PSK #$NAME" >> /etc/wireguard/wg0.conf
 		echo "AllowedIPs = 10.66.66.$SERVER_IPCOUNT/32 #$NAME" >> /etc/wireguard/wg0.conf
 
-		echo "local-data: \"$NAME in A 10.66.66.$SERVER_IPCOUNT\"" >> /etc/unbound/unbound.conf
-
 		wg syncconf wg0 <(wg-quick strip /etc/wireguard/wg0.conf)
-		systemctl restart unbound
 
 		echo "[Interface]" > "wg0-client-$NAME.conf"
 		echo "PrivateKey = $PRIVKEY" >> "wg0-client-$NAME.conf"
@@ -115,29 +107,26 @@ case $OPT in
 
 		NAME="$(grep "#" /etc/wireguard/wg0.conf | cut -c2- | sed -n "$NUM"p)"
 		NEW_WG="$(grep -v "#$NAME\$" /etc/wireguard/wg0.conf)"
-		NEW_DNS="$(grep -v "$NAME in" /etc/unbound/unbound.conf)"
 
 		echo -e "$NEW_WG" > /etc/wireguard/wg0.conf
-		echo -e "$NEW_DNS" > /etc/unbound/unbound.conf
 
 		wg syncconf wg0 <(wg-quick strip /etc/wireguard/wg0.conf)
-		systemctl restart unbound
 		;;
 	t)
-		systemctl stop wg-quick@wg0 unbound
+		systemctl stop wg-quick@wg0
 		;;
 	s)
-		systemctl start wg-quick@wg0 unbound
+		systemctl start wg-quick@wg0
 		;;
 	e)
-		systemctl enable wg-quick@wg0 unbound
+		systemctl enable wg-quick@wg0
 		;;
 	d)
-		systemctl disable wg-quick@wg0 unbound
+		systemctl disable wg-quick@wg0
 		;;
 	u)
-		systemctl disable --now wg-quick@wg0 unbound
-		rm -rf /etc/wireguard /etc/unbound
-		apt autoremove -y wireguard-tools unbound
+		systemctl disable --now wg-quick@wg0
+		rm -rf /etc/wireguard
+		apt autoremove -y wireguard-tools
 		;;
 esac
