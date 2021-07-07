@@ -86,7 +86,6 @@ case $OPT in
 		echo "[Interface]" > "wg0-client-$NAME.conf"
 		echo "PrivateKey = $PRIVKEY" >> "wg0-client-$NAME.conf"
 		echo "Address = 10.66.66.$SERVER_IPCOUNT/32" >> "wg0-client-$NAME.conf"
-		echo "DNS = 10.66.66.1" >> "wg0-client-$NAME.conf"
 		echo "[Peer]" >> "wg0-client-$NAME.conf"
 		echo "PublicKey = $SERVER_PUBKEY" >> "wg0-client-$NAME.conf"
 		echo "PresharedKey = $PSK" >> "wg0-client-$NAME.conf"
