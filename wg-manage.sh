@@ -8,32 +8,28 @@ if [[ $EUID -ne 0 ]]; then
 	die 'This script must be run as root'
 fi
 
-if [ ! -d /etc/wireguard ]; then
+if [ ! -d /etc/wireguard/installed ]; then
 	echo 'Installing WireGuard'
-	apt install -y wireguard-tools unbound
+	apt install -y wireguard-tools
 
-	PORT="$(shuf -i32768-61000 -n1)"
+	read -ep 'Public Wireguard IP/domain: ' -i "$(curl -s4 ipconfig.io)" PUBIP
+	read -ep 'Public Wireguard port: ' -i '51820' PORT
+
 	PRIVKEY="$(wg genkey)"
 	PUBKEY="$(echo "$PRIVKEY" | wg pubkey)"
 
-	echo "$PORT" > /etc/wireguard/port
 	echo "$PUBKEY" > /etc/wireguard/pubkey
-	echo "1" >> /etc/wireguard/ipcount
+	echo "$PUBIP:$PORT" > /etc/wireguard/endpoint
 
 	echo "[Interface]" > /etc/wireguard/wg0.conf
 	echo "Address = 10.66.66.1/24" >> /etc/wireguard/wg0.conf
 	echo "ListenPort = $PORT" >> /etc/wireguard/wg0.conf
 	echo "PrivateKey = $PRIVKEY" >> /etc/wireguard/wg0.conf
 
-	ech 'net.ipv4.ip_forward=1' > /etc/sysctl.d/wg.conf
+	echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/wg.conf
 	sysctl --system
 
 	systemctl enable --now wg-quick@wg0
-
-	if [ -f /usr/sbin/ufw ]; then
-		ufw allow in to any port $PORT proto udp
-		ufw route allow in on wg0
-	fi
 fi
 
 STATUS="$(systemctl status wg-quick@wg0)"
@@ -41,7 +37,8 @@ printf 'WireGuard status: %s (%s)\n' \
 	`echo "$STATUS" | grep --color=never -Po 'e: \K.*(?= \()'` \
 	`echo "$STATUS" | grep --color=never -Po '; \K.*(?=; v)'`
 
-wg
+echo 'Clients: '
+cat /etc/wireguard/wg0.conf | grep AllowedIPs | cut -c14-
 
 cat << !
 a) Add a peer
@@ -59,37 +56,39 @@ echo
 case $OPT in
 	a)
 		read -p 'Peer name: ' NAME
+		read -p 'Peer IP: ' IP
 
-		EXISTS="$(grep -c "# ${NAME}" /etc/wireguard/wg0.conf)"
+		EXISTS="$(grep -c "# $NAME" /etc/wireguard/wg0.conf)"
 		if [[ "$EXISTS" != "0" ]]; then
 			die "Peer with that name already exists"
+		fi
+
+		EXISTS="$(grep -c "$IP/" /etc/wireguard/wg0.conf)"
+		if [[ "$EXISTS" != "0" ]]; then
+			die "Peer with that IP already exists"
 		fi
 
 		PRIVKEY=$(wg genkey)
 		PUBKEY=$(echo "$PRIVKEY" | wg pubkey)
 		PSK=$(wg genpsk)
-		SERVER_IP=$(curl -s4 ifconfig.io/ip)
-		SERVER_PORT=$(</etc/wireguard/port)
+		SERVER_ENDPOINT=$(</etc/wireguard/endpoint)
 		SERVER_PUBKEY=$(</etc/wireguard/pubkey)
-		SERVER_IPCOUNT=$(( $(</etc/wireguard/ipcount) + 1 ))
-
-		echo "$SERVER_IPCOUNT" > /etc/wireguard/ipcount
 
 		echo "#$NAME" >> /etc/wireguard/wg0.conf
 		echo "[Peer] #$NAME" >> /etc/wireguard/wg0.conf
 		echo "PublicKey = $PUBKEY #$NAME" >> /etc/wireguard/wg0.conf
 		echo "PresharedKey = $PSK #$NAME" >> /etc/wireguard/wg0.conf
-		echo "AllowedIPs = 10.66.66.$SERVER_IPCOUNT/32 #$NAME" >> /etc/wireguard/wg0.conf
+		echo "AllowedIPs = $IP/32 #$NAME" >> /etc/wireguard/wg0.conf
 
 		wg syncconf wg0 <(wg-quick strip /etc/wireguard/wg0.conf)
 
 		echo "[Interface]" > "wg0-client-$NAME.conf"
 		echo "PrivateKey = $PRIVKEY" >> "wg0-client-$NAME.conf"
-		echo "Address = 10.66.66.$SERVER_IPCOUNT/32" >> "wg0-client-$NAME.conf"
+		echo "Address = $IP/32" >> "wg0-client-$NAME.conf"
 		echo "[Peer]" >> "wg0-client-$NAME.conf"
 		echo "PublicKey = $SERVER_PUBKEY" >> "wg0-client-$NAME.conf"
 		echo "PresharedKey = $PSK" >> "wg0-client-$NAME.conf"
-		echo "Endpoint = $SERVER_IP:$SERVER_PORT" >> "wg0-client-$NAME.conf"
+		echo "Endpoint = $SERVER_ENDPOINT" >> "wg0-client-$NAME.conf"
 		echo "AllowedIPs = 10.66.66.0/24" >> "wg0-client-$NAME.conf"
 		echo "PersistentKeepalive = 25" >> "wg0-client-$NAME.conf"
 
