@@ -103,7 +103,7 @@ case $OPT in
 
 		read -p "Select peer: " NUM
 
-		NAME="$(grep "#" /etc/wireguard/wg0.conf | cut -c2- | sed -n "$NUM"p)"
+		NAME="$(grep "^#" /etc/wireguard/wg0.conf | cut -c2- | sed -n "$NUM"p)"
 		NEW_WG="$(grep -v "#$NAME\$" /etc/wireguard/wg0.conf)"
 
 		echo -e "$NEW_WG" > /etc/wireguard/wg0.conf
