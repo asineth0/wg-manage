@@ -8,7 +8,7 @@ if [[ $EUID -ne 0 ]]; then
 	die 'This script must be run as root'
 fi
 
-if [ ! -d /etc/wireguard/installed ]; then
+if [ ! -f /etc/wireguard/wg0.conf ]; then
 	echo 'Installing WireGuard'
 	apt install -y wireguard-tools
 
